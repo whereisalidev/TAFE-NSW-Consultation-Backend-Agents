@@ -1,0 +1,9 @@
+google-genai
+requests
+firebase_admin
+fastapi
+google-adk
+python-dotenv 
+uvicorn
+selenium 
+webdriver-manager
