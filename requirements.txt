@@ -15,4 +15,3 @@ webdriver-manager
 # For Chrome WebDriver (ensure Chrome is installed)
 
 # Optional: logging is part of stdlib, no need to list
-
