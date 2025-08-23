@@ -115,7 +115,7 @@ def rating_scale_tool():
         <style>
             body {
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                width: 107%;
+                width: 90%;
                 margin: 0;
                 padding: 15px;
                 background-color: #f8f9fa;
@@ -592,6 +592,197 @@ def rating_scale_tool():
         "type": "html"
     }
 
+def rating_scale_v2_tool():
+    html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Priority Areas for Investment</title>
+    <style>
+        body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        width: 90%;
+        margin: 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        line-height: 1.5;
+        }
+        .consultation-container {
+        background: white;
+        padding: 25px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
+        }
+        .question-section {
+        margin-bottom: 25px;
+        padding: 20px;
+        border-left: 4px solid #007bff;
+        background-color: #f8f9fa;
+        border-radius: 0 6px 6px 0;
+        }
+        .question-title {
+        margin: 0 0 20px 0;
+        color: #212529;
+        font-size: 18px;
+        font-weight: 600;
+        }
+        .challenge-item {
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: white;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+        }
+        .challenge-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 10px;
+        font-size: 15px;
+        }
+        .rating-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 8px;
+        }
+        .rating-option {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 0 5px;
+        }
+        .rating-option input[type="radio"] {
+        margin-bottom: 5px;
+        accent-color: #007bff;
+        transform: scale(1.2);
+        }
+        .rating-label {
+        font-size: 12px;
+        color: #6c757d;
+        text-align: center;
+        font-weight: 500;
+        }
+        .scale-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 5px;
+        font-size: 11px;
+        color: #868e96;
+        }
+        .submit-container {
+        margin-top: 30px;
+        text-align: center;
+        }
+        .submit-btn {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 6px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        }
+        .submit-btn:hover {
+        background-color: #0056b3;
+        }
+        .submit-btn:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
+        }
+    </style>
+    </head>
+    <body>
+    <div class="consultation-container">
+        <div class="question-section">
+        <h3 class="question-title">If you had additional resources, rank your top 5 investment priorities (1 = highest priority):</h3>
+        <div id="challenge-list"></div>
+
+        <div class="submit-container">
+            <button type="button" class="submit-btn" id="submit-ratings">Submit Ratings</button>
+        </div>
+        </div>
+    </div>
+
+    <script>
+        const challenges = [
+        { key: "additional_staff", label: "Additional teaching staff" },
+        { key: "professional_development", label: "Professional development for existing staff" },
+        { key: "new_equipment", label: "New/upgraded equipment" },
+        { key: "facility_improvements", label: "Facility improvements/expansion" },
+        { key: "technology_infrastructure", label: "Technology infrastructure" },
+        { key: "industry_partnership_development", label: "Industry partnership development" },
+        { key: "marketing", label: "Marketing/student recruitment" },
+        { key: "curriculum_development", label: "Curriculum development/refresh" },
+        { key: "assessment_development", label: "Assessment development/refresh" },
+        { key: "quality_assurance", label: "Quality assurance/compliance systems" },
+        { key: "research_innovation", label: "Research and innovation capabilities" }
+        ];
+
+        const container = document.getElementById("challenge-list");
+
+        // Generate challenge items dynamically
+        challenges.forEach(challenge => {
+        const item = document.createElement("div");
+        item.className = "challenge-item";
+
+        item.innerHTML = `
+            <div class="challenge-label">${challenge.label}</div>
+            <div class="rating-container">
+            ${[1,2,3,4,5].map(num => `
+                <div class="rating-option">
+                <input type="radio" id="${challenge.key}_${num}" name="${challenge.key}" value="${num}">
+                <label for="${challenge.key}_${num}" class="rating-label">${num}</label>
+                </div>
+            `).join("")}
+            </div>
+            <div class="scale-labels"><span>Highest Priority</span><span>Lowest Priority</span></div>
+        `;
+
+        container.appendChild(item);
+        });
+
+        // Submission handling
+        const submitBtn = document.getElementById('submit-ratings');
+        function checkAllSelected() {
+        const allSelected = challenges.every(c => document.querySelector(`input[name="${c.key}"]:checked`));
+        submitBtn.disabled = !allSelected;
+        }
+
+        document.addEventListener("change", checkAllSelected);
+
+        submitBtn.addEventListener("click", () => {
+        const ratings = {};
+        challenges.forEach(c => {
+            const selected = document.querySelector(`input[name="${c.key}"]:checked`);
+            ratings[c.label] = selected ? selected.value : "Not selected";
+        });
+
+        let responseMessage = "Here are my ratings:\n\n";
+        Object.entries(ratings).forEach(([label, value]) => {
+            responseMessage += `${label}: ${value}/5\n`;
+        });
+
+        alert(responseMessage);
+        });
+
+        // Initial state
+        checkAllSelected();
+    </script>
+    </body>
+    </html>
+
+    """
+    return {
+        "message": html,
+        "type": "html"
+    }
+
+
 root_agent = Agent(
     name="riley_strategic_consultant",
     description="Riley - A strategic consultant AI specialized in priority discovery and strategic planning for TAFE NSW departments.",
@@ -638,6 +829,16 @@ root_agent = Agent(
     2.2 Current Operational Challenges
     ONLY after completing the performance data questions in SECTION 2.1, call the rating_scale_tool. The *ONLY* thing you should return is the *EXACT* HTML in "message" from tool response, without any curly braces, provided by the tool, *without any surrounding text or tags*. Do *NOT* include any introductory phrases or explanations. Just the HTML.
 
+    2.3 Biggest Operational Pain Points
+    What are the top 3 operational challenges keeping you awake at night?
+
+    SECTION 3: Strategic Priorities 
+    3.1 Strategic Vision
+    In your ideal world, what would your discipline/teaching area/programs look like in 3-5 years?
+
+    3.2 Priority Areas for Investment
+    ONLY after completing the SECTION 3.1, call the rating_scale_v2_tool. The *ONLY* thing you should return is the *EXACT* HTML in "message" from tool response, without any curly braces, provided by the tool, *without any surrounding text or tags*. Do *NOT* include any introductory phrases or explanations. Just the HTML.
+
     CONVERSATION FLOW:
     1. Start with personalized greeting using their actual name
     2. Ask ONE role context question per response (5 questions total)
@@ -657,7 +858,6 @@ root_agent = Agent(
     PROGRESSION RULES:
     - Do NOT ask about strategic challenges until ALL stakeholder context is complete
     - Complete Section 1.2 before moving to Section 2.1
-    - Only after Section 2.1 is complete, transition to strategic consultation
     - NEVER skip questions or jump to analysis before all context is gathered
 
     CRITICAL SEQUENCE CONTROL:
@@ -670,5 +870,5 @@ root_agent = Agent(
     Your goal is to systematically gather stakeholder context before proceeding to strategic consultation and priority discovery.
     """,
     model=LiteLlm("gemini/gemini-2.5-flash"),
-    tools=[FunctionTool(single_choice_selection__tool), FunctionTool(rating_scale_tool)]
+    tools=[FunctionTool(single_choice_selection__tool), FunctionTool(rating_scale_tool), FunctionTool(rating_scale_v2_tool)]
 )
