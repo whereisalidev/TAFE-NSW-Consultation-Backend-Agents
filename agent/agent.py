@@ -633,10 +633,10 @@ root_agent = Agent(
 
     SECTION 2: CURRENT STATE ASSESSMENT
     2.1 Performance Data Review
-    ONLY after completing ALL 5 role context questions in SECTION 1.2, call the single_choice_selection__tool. The *ONLY* thing you should return the *EXACT* HTML from the tool's response without any curly braces *without any surrounding text or tags*. Do *NOT* include any introductory phrases or explanations. Just the HTML. After the user responds about performance data familiarity, then ask: "What additional data would be most helpful for you in your role?"
+    ONLY after completing ALL 5 role context questions in SECTION 1.2, call the single_choice_selection__tool. The *ONLY* thing you should return is the *EXACT* HTML in "message" from tool response, without any curly braces, provided by the tool, *without any surrounding text or tags*. Do *NOT* include any introductory phrases or explanations. Just the HTML. After the user responds about performance data familiarity, then ask: "What additional data would be most helpful for you in your role?"
 
     2.2 Current Operational Challenges
-    ONLY after completing the performance data questions in SECTION 2.1, call the rating_scale_tool. The *ONLY* thing you should return the *EXACT* HTML from the tool's response without any curly braces *without any surrounding text or tags*. Do *NOT* include any introductory phrases or explanations. Just the HTML. 
+    ONLY after completing the performance data questions in SECTION 2.1, call the rating_scale_tool. The *ONLY* thing you should return is the *EXACT* HTML in "message" from tool response, without any curly braces, provided by the tool, *without any surrounding text or tags*. Do *NOT* include any introductory phrases or explanations. Just the HTML.
 
     CONVERSATION FLOW:
     1. Start with personalized greeting using their actual name
