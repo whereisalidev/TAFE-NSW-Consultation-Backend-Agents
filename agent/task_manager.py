@@ -6,6 +6,7 @@ Handles consultation sessions and priority analysis.
 import os
 import logging
 import uuid
+import re
 from typing import Dict, Any, Optional, List
 
 from google.adk.agents import Agent
@@ -102,13 +103,21 @@ class TaskManager:
             
             # Process response
             final_message = "Hello! I'm Riley, your strategic consultant. How can I help you today?"
+            interactive_question_data = None
             
             async for event in events_async:
                 if event.is_final_response() and event.content and event.content.role == "model":
                     if event.content.parts and event.content.parts[0].text:
                         final_message = event.content.parts[0].text
                         logger.info(f"Agent response: {final_message}")
-            
+
+                        # Parse for interactive questions
+                        # parsed_interactive = self._parse_interactive_questions(final_message)
+                        # if parsed_interactive:
+                        #     interactive_question_data = parsed_interactive
+                        #     final_message = parsed_interactive.get("clean_message", "") # Use clean message for display
+                        #     logger.info(f"Parsed interactive question: {interactive_question_data}")
+
             # Handle special cases like analysis completion (same as first file)
             response_result = await self._handle_special_responses(
                 final_message, message, context, user_id
@@ -117,7 +126,7 @@ class TaskManager:
             if response_result:
                 return response_result
             
-            return {
+            response_data = {
                 "message": final_message,
                 "status": "success",
                 "session_id": session_id,
@@ -126,6 +135,12 @@ class TaskManager:
                     "department": department
                 }
             }
+            
+            # Add interactive question data if present
+            if interactive_question_data:
+                response_data["interactive_question_data"] = interactive_question_data
+            
+            return response_data
             
         except Exception as e:
             logger.error(f"Error processing task: {e}")
@@ -136,6 +151,11 @@ class TaskManager:
     
     def _build_riley_context(self, current_message: str, context: Dict, department: str, conversation_history: List[Dict]) -> str:
         """Build comprehensive context for Riley's response."""
+        
+        # Extract stakeholder information from context
+        user_name = context.get('name', 'there')
+        user_role = context.get('role', 'unknown role')
+        user_department = context.get('department', department)
         
         # Analyze conversation stage and user needs
         conversation_stage = self._analyze_conversation_context(current_message, conversation_history)
@@ -152,8 +172,8 @@ class TaskManager:
         if conversation_stage == "analysis_phase":
             progression_guidance = """
     
-CRITICAL: Riley must now STOP asking questions and START ANALYSIS. Say something like:
-"Based on our conversation, I can see several strategic priorities emerging. Let me provide you with my analysis..."
+CRITICAL: ALL CONTEXT QUESTIONS COMPLETED. Riley must now START ANALYSIS. Say something like:
+"Thank you for providing all that context, {user_name}! Based on our conversation, I can see several strategic priorities emerging. Let me provide you with my analysis..."
 
 Then provide:
 1. Summary of priorities discussed
@@ -161,18 +181,27 @@ Then provide:
 3. Categorization by themes
 4. Recommendations for next steps
 """
-        elif len(conversation_history) >= 8:  # Force progression after 8 messages
+        elif conversation_stage == "role_context_gathering":
             progression_guidance = """
-    
-CRITICAL: Too many questions asked. Riley must now CONCLUDE the discovery phase and provide STRATEGIC ANALYSIS and ACTION RECOMMENDATIONS. Do not ask more questions.
+
+CRITICAL: CONTINUE ROLE CONTEXT QUESTIONS. Do NOT provide analysis yet. Ask the next role context question in sequence.
+"""
+        elif conversation_stage == "performance_data_gathering":
+            progression_guidance = """
+
+CRITICAL: ASK PERFORMANCE DATA QUESTIONS. Do NOT provide analysis yet. Ask about performance metrics familiarity.
 """
 
         return f"""
 RILEY'S CONSULTATION CONTEXT:
 
-CURRENT SITUATION:
-- Department: {department}
+STAKEHOLDER INFORMATION:
+- Name: {user_name}
+- Role: {user_role}
+- Department: {user_department}
 - User ID: {context.get('user_id', 'unknown')}
+
+CURRENT SITUATION:
 - Conversation Stage: {conversation_stage}
 - Strategic Focus Area: {strategic_focus}
 
@@ -190,19 +219,20 @@ TAFE NSW CONTEXT TO CONSIDER:
 - Subject to ASQA requirements and government policy frameworks
 
 RILEY'S RESPONSE GUIDELINES:
-1. Acknowledge what the user has shared
-2. Use strategic thinking to identify underlying priorities
-3. Ask 1 probing question on each response that help uncover strategic insights
-4. Reference TAFE NSW context when relevant
-5. Keep response conversational but professionally focused
-6. Build on previous conversation threads
-7. Challenge assumptions constructively when appropriate
+1. Use the stakeholder's actual name ({user_name}) in your responses
+2. Acknowledge what the user has shared
+3. Use strategic thinking to identify underlying priorities
+4. Ask 1 probing question on each response that help uncover strategic insights
+5. Reference TAFE NSW context when relevant
+6. Keep response conversational but professionally focused
+7. Build on previous conversation threads
+8. Challenge assumptions constructively when appropriate
 
-Remember: You are Riley having a strategic conversation. Be warm, curious, and genuinely interested in helping them discover their priorities.
+Remember: You are Riley having a strategic conversation with {user_name}, who works as {user_role} in {user_department}. Be warm, curious, and genuinely interested in helping them discover their priorities.
 
 CURRENT USER MESSAGE: "{current_message}"
 
-Respond as Riley would in this consultation context:
+Respond as Riley would in this consultation context, using {user_name}'s actual name:
 
 {progression_guidance}
 """
@@ -230,23 +260,51 @@ Respond as Riley would in this consultation context:
                 and any(phrase in message_lower for phrase in ["thanks", "thank you", "bye", "goodbye", "see you", "great", "perfect", "excellent"])):
                 return "consultation_complete"
 
-        # Count substantive exchanges (not just greetings)
-        substantive_exchanges = len([h for h in history if len(h.get('message', '')) > 20])
+        # Count questions asked by checking AI messages for question patterns
+        ai_questions_asked = 0
+        context_questions = [
+            "years have you been in your current position",
+            "years with tafe nsw",
+            "direct reports",
+            "internal stakeholders",
+            "external stakeholders"
+        ]
         
+        for msg in history:
+            if msg.get('sender') == 'ai':
+                ai_msg = msg.get('message', '').lower()
+                for question in context_questions:
+                    if question in ai_msg:
+                        ai_questions_asked += 1
+                        break
+        
+        # Performance data question patterns
+        performance_questions = [
+            "familiar are you with the performance metrics",
+            "performance metrics for your area",
+            "additional data would be helpful"
+        ]
+        
+        performance_questions_asked = 0
+        for msg in history:
+            if msg.get('sender') == 'ai':
+                ai_msg = msg.get('message', '').lower()
+                for question in performance_questions:
+                    if question in ai_msg:
+                        performance_questions_asked += 1
+                        break
+
+        # Determine stage based on questions asked
         if history_length == 0 or any(keyword in message_lower for keyword in ["hello", "hi", "start", "begin"]):
             return "initial_engagement"
-        elif substantive_exchanges < 2:
-            return "context_gathering"
-        elif substantive_exchanges < 4 and any(keyword in message_lower for keyword in ["challenge", "problem", "issue", "difficulty"]):
-            return "problem_identification"
-        elif substantive_exchanges < 6:
-            return "priority_discovery"
-        elif substantive_exchanges >= 6 and not any(keyword in message_lower for keyword in ["analysis", "summary", "plan"]):
-            return "analysis_phase"  # Force analysis after 6 exchanges
-        elif any(keyword in message_lower for keyword in ["action", "implement", "next steps", "plan"]):
-            return "action_planning"
+        elif ai_questions_asked < 5:  # Need all 5 role context questions first
+            return "role_context_gathering"
+        elif ai_questions_asked >= 5 and performance_questions_asked < 2:  # Then performance data questions
+            return "performance_data_gathering"
+        elif performance_questions_asked >= 2:  # Only after all context questions
+            return "analysis_phase"
         else:
-            return "analysis_phase"  # Default to analysis if too many exchanges
+            return "role_context_gathering"  # Default back to context gathering
             
     def _identify_strategic_focus(self, current_message: str, history: List[Dict]) -> str:
         """Identify the strategic focus area from the conversation."""
@@ -276,41 +334,36 @@ Respond as Riley would in this consultation context:
         stage_approaches = {
             "initial_engagement": """
             Riley should:
-            - Welcome them warmly and establish rapport
-            - Ask "What are the top 3 things keeping you awake at night about your department?"
-            - Set the consultation tone as collaborative and strategic
+            - Welcome them warmly using their actual name
+            - Acknowledge their role and department
+            - Start with the first role context question: "How many years have you been in your current position?"
             """,
-            "context_gathering": """
+            "role_context_gathering": """
             Riley should:
-            - Build understanding of their department's current situation
-            - Ask about their role, team, and main responsibilities
-            - After 2-3 exchanges, move to problem identification
+            - Continue with the role context questions in order
+            - Ask ONE question at a time from the sequence:
+              1. Years in current position
+              2. Years with TAFE NSW overall  
+              3. Number of direct reports
+              4. Key internal stakeholders
+              5. Key external stakeholders
+            - Do NOT proceed to performance data until ALL 5 questions are answered
+            - Do NOT provide analysis yet
             """,
-            "problem_identification": """
+            "performance_data_gathering": """
             Riley should:
-            - Dive deeper into challenges they've mentioned
-            - Ask "What's driving this - is it student outcomes, industry demand, or regulatory requirements?"
-            - After identifying 2-3 key challenges, move to priority discovery
-            """,
-            "priority_discovery": """
-            Riley should:
-            - Help them evaluate and rank their priorities
-            - Ask "What happens if we don't address this in the next 6-12 months?"
-            - IMPORTANT: After 3-4 priority discussions, START ANALYSIS: "Based on our conversation, I can see several strategic priorities emerging. Let me analyze these for you..."
+            - After ALL role context questions, ask about performance data familiarity
+            - Ask: "Now I'd like to understand your relationship with performance data. How familiar are you with the performance metrics for your area?" with checkbox options
+            - Then ask: "What additional data would be most helpful for you in your role?"
+            - Do NOT provide analysis until BOTH performance questions are answered
             """,
             "analysis_phase": """
             Riley should:
+            - NOW provide strategic analysis based on all gathered context
             - Summarize the priorities discussed
             - Provide strategic analysis using frameworks (Eisenhower Matrix, Impact/Effort)
             - Score priorities on importance (1-10) and urgency (1-10)
             - Categorize by themes (Student Outcomes, Digital Transformation, etc.)
-            """,
-            "action_planning": """
-            Riley should:
-            - Create specific action plans for top 3 priorities
-            - Define success metrics and timelines
-            - Identify key stakeholders and resources needed
-            - Provide implementation roadmap
             """,
             "consultation_complete": """
             Riley should:
@@ -318,7 +371,6 @@ Respond as Riley would in this consultation context:
             - Provide a brief, warm closing statement
             - NOT repeat analysis or action plans
             - Keep response short and professional
-            - Example: "You're very welcome, Alex! Best of luck implementing these initiatives. Feel free to reach out if you need any follow-up support. Cheers!"
             """
         }
         
@@ -332,8 +384,7 @@ Respond as Riley would in this consultation context:
             "strategic_planning": "Consider broader organizational alignment and future direction"
         }
         
-        # Add progression logic
-        return f"{stage_approaches.get(stage, 'Continue strategic dialogue based on conversation context')}\n\nFocus Context: {focus_context.get(focus, 'General strategic thinking')}"    
+        return f"{stage_approaches.get(stage, 'Continue systematic context gathering - do not analyze yet')}\n\nFocus Context: {focus_context.get(focus, 'General strategic thinking')}"    
     
     def _format_conversation_history(self, history: List[Dict]) -> str:
         """Format conversation history for context."""
@@ -387,5 +438,65 @@ Respond as Riley would in this consultation context:
                     "follow_up_recommended": True
                 }
             }
+        
+        return None
+
+    def _parse_interactive_questions(self, message: str) -> Optional[Dict[str, Any]]:
+        """Parse interactive questions from agent response."""
+
+        # First, check if the message is HTML
+        if message.startswith("<!DOCTYPE html>"):
+            return {
+                "type": "html",
+                "html": message
+            }
+        
+        # Look for [RADIO_BUTTONS] tags
+        radio_pattern = r'\[RADIO_BUTTONS\](.*?)\[/RADIO_BUTTONS\]'
+        radio_match = re.search(radio_pattern, message, re.DOTALL)
+        
+        if radio_match:
+            # Extract the options between the tags
+            options_text = radio_match.group(1).strip()
+            
+            # Parse individual options (lines starting with -)
+            options = []
+            for line in options_text.split('\n'):
+                line = line.strip()
+                if line.startswith('-'):
+                    option = line[1:].strip()  # Remove the dash and trim
+                    if option:
+                        options.append(option)
+            
+            if options:
+                # Extract the question text (everything before [RADIO_BUTTONS])
+                question_text = message[:radio_match.start()].strip()
+                
+                # Clean up the question text - remove quotes if present
+                if question_text.startswith('"') and question_text.endswith('"'):
+                    question_text = question_text[1:-1]
+                
+                # Extract the last sentence that ends with a question mark as the actual question
+                question_sentences = question_text.split('.')
+                actual_question = ""
+                for sentence in reversed(question_sentences):
+                    sentence = sentence.strip()
+                    if sentence.endswith('?'):
+                        actual_question = sentence
+                        break
+                
+                # If no question mark found, use a default format
+                if not actual_question:
+                    actual_question = "Please select one of the following options:"
+                
+                # Remove the radio buttons section from the main message
+                clean_message = message.replace(radio_match.group(0), '').strip()
+                
+                return {
+                    "type": "choice",  # Changed from "radio" to "choice" to match frontend expectations
+                    "question": actual_question,
+                    "options": options,
+                    "clean_message": clean_message
+                }
         
         return None

@@ -8,6 +8,10 @@ import sys
 import logging
 import asyncio
 from dotenv import load_dotenv
+import os # Import os module
+
+# Add the parent directory (backend) to the Python path to allow importing common
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 # Use relative imports within the agent package
 from .task_manager import TaskManager
